@@ -8,6 +8,10 @@ const showDebugCountdownInput = document.getElementById("showDebugCountdown");
 const saveBtn = document.getElementById("saveBtn");
 const resetBtn = document.getElementById("resetBtn");
 const statusEl = document.getElementById("status");
+const todoList = document.getElementById("todoList");
+const todoInput = document.getElementById("todoInput");
+const addTodoBtn = document.getElementById("addTodoBtn");
+const extremeWarning = document.getElementById("extremeWarning");
 
 const DEFAULT_SETTINGS = {
   enabled: true,
@@ -27,12 +31,26 @@ function showStatus(message, isError = false) {
 }
 
 function loadOptions() {
-  chrome.storage.sync.get("settings", data => {
+  chrome.storage.sync.get(["settings", "todoList", "extremeModeEmergencyUsed"], data => {
     const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
     timeLimitInput.value = settings.timeLimitMinutes;
     extremeModeInput.checked = settings.extremeModeEnabled;
     extremeDurationInput.value = settings.extremeDurationMinutes;
-     showDebugCountdownInput.checked = settings.showDebugCountdown;
+    showDebugCountdownInput.checked = settings.showDebugCountdown;
+    
+    // Load to-do list
+    const todos = data.todoList || [];
+    renderTodoList(todos);
+    
+    // Check if extreme mode lock-in is active
+    const emergencyUsed = data.extremeModeEmergencyUsed || false;
+    if (emergencyUsed && settings.extremeModeEnabled) {
+      extremeModeInput.disabled = true;
+      extremeWarning.style.display = "block";
+    } else {
+      extremeModeInput.disabled = false;
+      extremeWarning.style.display = "none";
+    }
   });
 }
 
@@ -49,28 +67,119 @@ function saveOptions() {
     return;
   }
 
-  const newSettings = {
-    timeLimitMinutes: timeLimit,
-    extremeModeEnabled: extremeModeInput.checked,
-    extremeDurationMinutes: extremeDuration,
-    showDebugCountdown: showDebugCountdownInput.checked
-  };
-
-  chrome.storage.sync.get("settings", data => {
+  chrome.storage.sync.get(["settings", "extremeModeEmergencyUsed"], data => {
     const existing = data.settings || {};
+    const emergencyUsed = data.extremeModeEmergencyUsed || false;
+    const wasExtremeEnabled = existing.extremeModeEnabled || false;
+    const willBeExtremeEnabled = extremeModeInput.checked;
+    
+    // Check if user is trying to disable extreme mode after emergency was used
+    if (emergencyUsed && wasExtremeEnabled && !willBeExtremeEnabled) {
+      showStatus("Extreme mode cannot be disabled after emergency use. Disable the extension instead.", true);
+      extremeModeInput.checked = true; // Revert the checkbox
+      return;
+    }
+    
+    // Track if extreme mode was disabled (emergency use)
+    let newEmergencyUsed = emergencyUsed;
+    if (wasExtremeEnabled && !willBeExtremeEnabled && !emergencyUsed) {
+      newEmergencyUsed = true;
+    }
+
+    const newSettings = {
+      timeLimitMinutes: timeLimit,
+      extremeModeEnabled: willBeExtremeEnabled,
+      extremeDurationMinutes: extremeDuration,
+      showDebugCountdown: showDebugCountdownInput.checked
+    };
+
     const merged = { ...DEFAULT_SETTINGS, ...existing, ...newSettings };
-    chrome.storage.sync.set({ settings: merged }, () => {
+    
+    chrome.storage.sync.set({ 
+      settings: merged,
+      extremeModeEmergencyUsed: newEmergencyUsed
+    }, () => {
       if (chrome.runtime.lastError) {
         showStatus("Failed to save settings.", true);
         return;
       }
       showStatus("Settings saved.");
+      loadOptions(); // Reload to update UI state
+    });
+  });
+}
+
+function renderTodoList(todos) {
+  todoList.innerHTML = "";
+  if (todos.length === 0) {
+    todoList.innerHTML = '<p style="font-size: 12px; color: #9ca3af; font-style: italic;">No tasks yet. Add one above!</p>';
+    return;
+  }
+  todos.forEach((todo, index) => {
+    const item = document.createElement("div");
+    item.className = "todo-item";
+    item.innerHTML = `
+      <span>${escapeHtml(todo)}</span>
+      <button class="remove-todo" data-index="${index}">Remove</button>
+    `;
+    todoList.appendChild(item);
+  });
+  
+  // Add event listeners to remove buttons
+  document.querySelectorAll(".remove-todo").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const index = parseInt(btn.getAttribute("data-index"), 10);
+      removeTodo(index);
+    });
+  });
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function addTodo() {
+  const text = todoInput.value.trim();
+  if (!text) return;
+  
+  chrome.storage.sync.get("todoList", data => {
+    const todos = data.todoList || [];
+    todos.push(text);
+    chrome.storage.sync.set({ todoList: todos }, () => {
+      if (chrome.runtime.lastError) {
+        showStatus("Failed to add task.", true);
+        return;
+      }
+      renderTodoList(todos);
+      todoInput.value = "";
+      showStatus("Task added.");
+    });
+  });
+}
+
+function removeTodo(index) {
+  chrome.storage.sync.get("todoList", data => {
+    const todos = data.todoList || [];
+    todos.splice(index, 1);
+    chrome.storage.sync.set({ todoList: todos }, () => {
+      if (chrome.runtime.lastError) {
+        showStatus("Failed to remove task.", true);
+        return;
+      }
+      renderTodoList(todos);
+      showStatus("Task removed.");
     });
   });
 }
 
 function resetOptions() {
-  chrome.storage.sync.set({ settings: { ...DEFAULT_SETTINGS } }, () => {
+  chrome.storage.sync.set({ 
+    settings: { ...DEFAULT_SETTINGS },
+    todoList: [],
+    extremeModeEmergencyUsed: false
+  }, () => {
     if (chrome.runtime.lastError) {
       showStatus("Failed to reset settings.", true);
       return;
@@ -82,6 +191,23 @@ function resetOptions() {
 
 saveBtn.addEventListener("click", saveOptions);
 resetBtn.addEventListener("click", resetOptions);
+addTodoBtn.addEventListener("click", addTodo);
+todoInput.addEventListener("keypress", (e) => {
+  if (e.key === "Enter") {
+    addTodo();
+  }
+});
+
+// Prevent toggling extreme mode if lock-in is active
+extremeModeInput.addEventListener("change", () => {
+  chrome.storage.sync.get("extremeModeEmergencyUsed", data => {
+    const emergencyUsed = data.extremeModeEmergencyUsed || false;
+    if (emergencyUsed && !extremeModeInput.checked) {
+      showStatus("Extreme mode cannot be disabled after emergency use.", true);
+      extremeModeInput.checked = true;
+    }
+  });
+});
 
 document.addEventListener("DOMContentLoaded", loadOptions);
 

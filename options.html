@@ -58,6 +58,41 @@
     button:hover {
       opacity: 0.95;
     }
+    .todo-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      background-color: #f9fafb;
+      border-radius: 4px;
+      border: 1px solid #e5e7eb;
+    }
+    .todo-item span {
+      flex: 1;
+      font-size: 13px;
+    }
+    .todo-item button {
+      margin-top: 0;
+      padding: 4px 8px;
+      font-size: 11px;
+      background-color: #ef4444;
+      border-color: #ef4444;
+      color: white;
+    }
+    .todo-item button:hover {
+      background-color: #dc2626;
+      border-color: #dc2626;
+    }
+    .extreme-warning {
+      padding: 10px;
+      margin-top: 8px;
+      background-color: #fef3c7;
+      border: 1px solid #fbbf24;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #92400e;
+    }
     #status {
       margin-top: 10px;
       font-size: 12px;
@@ -80,9 +115,22 @@
       Enable Extreme Mode (block all target sites when limit is reached)
     </label>
   </div>
+  <div id="extremeWarning" class="extreme-warning" style="display: none;">
+    ⚠️ <strong>Lock-in Active:</strong> Extreme mode can only be disabled once for emergency. After that, you must disable the extension to turn it off.
+  </div>
   <div class="row">
     <label for="extremeDuration">Block duration (minutes)</label>
     <input type="number" id="extremeDuration" min="5" max="480" step="5">
+  </div>
+
+  <h2>To-Do List</h2>
+  <p style="font-size: 13px; color: #6b7280; margin-bottom: 12px;">
+    Add tasks you need to complete. These will be shown on the block page to remind you what you should be doing instead.
+  </p>
+  <div id="todoList" style="margin-bottom: 12px;"></div>
+  <div style="display: flex; gap: 8px; margin-bottom: 20px;">
+    <input type="text" id="todoInput" placeholder="Enter a task..." style="flex: 1; padding: 6px 8px; font-size: 13px; border-radius: 4px; border: 1px solid #d1d5db;">
+    <button id="addTodoBtn" style="margin-top: 0;">Add</button>
   </div>
 
   <h2>Debug</h2>

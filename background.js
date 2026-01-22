@@ -10,6 +10,9 @@ const DEFAULT_SETTINGS = {
   showDebugCountdown: false // show in-page countdown overlay
 };
 
+// Track if extreme mode emergency disable has been used
+let extremeModeEmergencyUsed = false;
+
 // In-memory state (mirrored to storage.local)
 let settings = { ...DEFAULT_SETTINGS };
 let currentActiveTabId = null;
@@ -42,20 +45,37 @@ function isTargetUrl(urlString) {
     return true;
   }
 
-  // instagram reels
+  // instagram (all of it)
   if (
-    (hostname === "www.instagram.com" || hostname === "instagram.com") &&
-    path.startsWith("/reels")
+    hostname === "www.instagram.com" ||
+    hostname === "instagram.com"
   ) {
     return true;
   }
 
-  // twitter / x main feed (you can refine paths if you want stricter matching)
+  // twitter / x (all of it)
   if (
     hostname === "twitter.com" ||
     hostname === "www.twitter.com" ||
     hostname === "x.com" ||
     hostname === "www.x.com"
+  ) {
+    return true;
+  }
+
+  // facebook (all of it)
+  if (
+    hostname === "www.facebook.com" ||
+    hostname === "facebook.com" ||
+    hostname === "m.facebook.com"
+  ) {
+    return true;
+  }
+
+  // tiktok (all of it)
+  if (
+    hostname === "www.tiktok.com" ||
+    hostname === "tiktok.com"
   ) {
     return true;
   }
@@ -70,11 +90,19 @@ function getBlockPageUrl() {
 
 // Load settings and state from storage
 async function loadSettingsAndState() {
-  const syncData = await chrome.storage.sync.get("settings");
+  const syncData = await chrome.storage.sync.get(["settings", "extremeModeEmergencyUsed"]);
   if (syncData.settings) {
     settings = { ...DEFAULT_SETTINGS, ...syncData.settings };
   } else {
     settings = { ...DEFAULT_SETTINGS };
+  }
+  
+  extremeModeEmergencyUsed = syncData.extremeModeEmergencyUsed || false;
+  
+  // Enforce lock-in: if emergency was used and extreme mode is disabled, re-enable it
+  if (extremeModeEmergencyUsed && !settings.extremeModeEnabled) {
+    settings.extremeModeEnabled = true;
+    await saveSettings({ extremeModeEnabled: true });
   }
 
   const localData = await chrome.storage.local.get([
@@ -258,7 +286,7 @@ function handleLimitReached(tab) {
 
     createNotification(
       "Doomscrolling blocked",
-      `Extreme mode: all short-form sites are blocked for ${settings.extremeDurationMinutes} minutes.`
+      `Extreme mode: all social media sites are blocked for ${settings.extremeDurationMinutes} minutes.`
     );
   } else {
     // Redirect only the current tab to the local block page
@@ -266,7 +294,7 @@ function handleLimitReached(tab) {
     chrome.tabs.update(tab.id, { url: blockUrl }).catch(() => {});
     createNotification(
       "Doomscrolling stopped",
-      `You spent more than ${settings.timeLimitMinutes} minutes on short-form social media. Time to get back to work.`
+      `You spent more than ${settings.timeLimitMinutes} minutes on social media. Time to get back to work.`
     );
   }
 }
@@ -328,10 +356,22 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 // React to settings changes from options/popup
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === "sync" && changes.settings) {
-    const newSettings = changes.settings.newValue || {};
-    settings = { ...DEFAULT_SETTINGS, ...newSettings };
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName === "sync") {
+    if (changes.settings) {
+      const newSettings = changes.settings.newValue || {};
+      const wasExtremeEnabled = settings.extremeModeEnabled || false;
+      settings = { ...DEFAULT_SETTINGS, ...newSettings };
+      
+      // Enforce lock-in: prevent disabling extreme mode if emergency was used
+      if (extremeModeEmergencyUsed && wasExtremeEnabled && !settings.extremeModeEnabled) {
+        settings.extremeModeEnabled = true;
+        await saveSettings({ extremeModeEnabled: true });
+      }
+    }
+    if (changes.extremeModeEmergencyUsed) {
+      extremeModeEmergencyUsed = changes.extremeModeEmergencyUsed.newValue || false;
+    }
   }
 });
 

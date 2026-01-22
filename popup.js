@@ -30,7 +30,7 @@ function renderStatus(data) {
   if (isBlocked) {
     statusLine.innerHTML =
       '<span class="badge badge-blocked">BLOCKED</span> ' +
-      `Short-form sites blocked until ${formatTime(blockUntil)}.`;
+      `Social media sites blocked until ${formatTime(blockUntil)}.`;
   } else if (settings && settings.enabled) {
     const extremeText = settings.extremeModeEnabled ? "Extreme mode ON" : "Extreme mode OFF";
     statusLine.innerHTML =

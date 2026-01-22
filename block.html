@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <img src="DoomscrollKillerLogo.png" alt="Doomscrolling Killer" style="margin-bottom: 16px;">
   <title>Stop Doomscrolling</title>
   <style>
     body {
@@ -12,7 +13,7 @@
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: radial-gradient(circle at top, #e0f2fe, #eff6ff);
+      background: radial-gradient(circle at top, #ffffff, #ffffff);
       color: #111827;
       text-align: center;
       padding: 16px;
@@ -49,15 +50,56 @@
     button:hover {
       background-color: #4338ca;
     }
+    .todo-section {
+      margin-top: 24px;
+      max-width: 400px;
+      width: 100%;
+    }
+    .todo-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #111827;
+    }
+    .todo-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      text-align: left;
+    }
+    .todo-item {
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border-radius: 8px;
+      border-left: 3px solid #4f46e5;
+      font-size: 14px;
+      color: #374151;
+    }
+    .todo-empty {
+      padding: 12px;
+      background-color: rgba(255, 255, 255, 0.5);
+      border-radius: 8px;
+      font-size: 13px;
+      color: #6b7280;
+      font-style: italic;
+    }
   </style>
 </head>
 <body>
-  <div class="badge">Doomscrolling Killer</div>
+  <!-- <div class="badge">Doomscrolling Killer</div> -->
   <h1>Stop doomscrolling.</h1>
   <p>
-    You’ve hit your limit on short-form social media.
+    You've hit your limit on social media.
     Take a breath, close this tab, and get back to what really matters.
   </p>
+  
+  <div class="todo-section" id="todoSection" style="display: none;">
+    <div class="todo-title">📋 Things you need to do:</div>
+    <ul class="todo-list" id="todoList"></ul>
+  </div>
+
+  <script src="block.js"></script>
 </body>
 </html>
 
