@@ -36,6 +36,11 @@
       margin-right: 6px;
       cursor: pointer;
     }
+    input[type="radio"] {
+      transform: scale(1.1);
+      margin-right: 6px;
+      cursor: pointer;
+    }
     .row {
       margin-bottom: 8px;
     }
@@ -108,11 +113,23 @@
     <input type="number" id="timeLimit" min="1" max="240" step="1">
   </div>
 
-  <h2>Extreme Mode</h2>
+  <h2>Blocking Mode</h2>
   <div class="row">
     <label>
-      <input type="checkbox" id="extremeMode">
-      Enable Extreme Mode (block all target sites when limit is reached)
+      <input type="radio" name="blockMode" id="softMode" value="soft">
+      Soft Mode (apply grayscale filter - sites remain accessible but less appealing)
+    </label>
+  </div>
+  <div class="row">
+    <label>
+      <input type="radio" name="blockMode" id="normalMode" value="normal">
+      Normal Mode (redirect to block page when limit is reached)
+    </label>
+  </div>
+  <div class="row">
+    <label>
+      <input type="radio" name="blockMode" id="extremeMode" value="extreme">
+      Extreme Mode (block all target sites when limit is reached)
     </label>
   </div>
   <div id="extremeWarning" class="extreme-warning" style="display: none;">

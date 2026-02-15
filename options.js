@@ -2,6 +2,8 @@
 // Configure time limit and extreme mode settings.
 
 const timeLimitInput = document.getElementById("timeLimit");
+const softModeInput = document.getElementById("softMode");
+const normalModeInput = document.getElementById("normalMode");
 const extremeModeInput = document.getElementById("extremeMode");
 const extremeDurationInput = document.getElementById("extremeDuration");
 const showDebugCountdownInput = document.getElementById("showDebugCountdown");
@@ -16,6 +18,7 @@ const extremeWarning = document.getElementById("extremeWarning");
 const DEFAULT_SETTINGS = {
   enabled: true,
   timeLimitMinutes: 5,
+  softModeEnabled: false,
   extremeModeEnabled: false,
   extremeDurationMinutes: 60,
   showDebugCountdown: false
@@ -34,9 +37,17 @@ function loadOptions() {
   chrome.storage.sync.get(["settings", "todoList", "extremeModeEmergencyUsed"], data => {
     const settings = { ...DEFAULT_SETTINGS, ...(data.settings || {}) };
     timeLimitInput.value = settings.timeLimitMinutes;
-    extremeModeInput.checked = settings.extremeModeEnabled;
     extremeDurationInput.value = settings.extremeDurationMinutes;
     showDebugCountdownInput.checked = settings.showDebugCountdown;
+    
+    // Set radio buttons based on mode
+    if (settings.softModeEnabled) {
+      softModeInput.checked = true;
+    } else if (settings.extremeModeEnabled) {
+      extremeModeInput.checked = true;
+    } else {
+      normalModeInput.checked = true;
+    }
     
     // Load to-do list
     const todos = data.todoList || [];
@@ -46,9 +57,13 @@ function loadOptions() {
     const emergencyUsed = data.extremeModeEmergencyUsed || false;
     if (emergencyUsed && settings.extremeModeEnabled) {
       extremeModeInput.disabled = true;
+      softModeInput.disabled = true;
+      normalModeInput.disabled = true;
       extremeWarning.style.display = "block";
     } else {
       extremeModeInput.disabled = false;
+      softModeInput.disabled = false;
+      normalModeInput.disabled = false;
       extremeWarning.style.display = "none";
     }
   });
@@ -71,24 +86,29 @@ function saveOptions() {
     const existing = data.settings || {};
     const emergencyUsed = data.extremeModeEmergencyUsed || false;
     const wasExtremeEnabled = existing.extremeModeEnabled || false;
-    const willBeExtremeEnabled = extremeModeInput.checked;
+    
+    // Determine which mode is selected
+    const willBeSoftMode = softModeInput.checked;
+    const willBeExtremeMode = extremeModeInput.checked;
+    const willBeNormalMode = normalModeInput.checked;
     
     // Check if user is trying to disable extreme mode after emergency was used
-    if (emergencyUsed && wasExtremeEnabled && !willBeExtremeEnabled) {
+    if (emergencyUsed && wasExtremeEnabled && !willBeExtremeMode) {
       showStatus("Extreme mode cannot be disabled after emergency use. Disable the extension instead.", true);
-      extremeModeInput.checked = true; // Revert the checkbox
+      extremeModeInput.checked = true; // Revert to extreme mode
       return;
     }
     
     // Track if extreme mode was disabled (emergency use)
     let newEmergencyUsed = emergencyUsed;
-    if (wasExtremeEnabled && !willBeExtremeEnabled && !emergencyUsed) {
+    if (wasExtremeEnabled && !willBeExtremeMode && !emergencyUsed) {
       newEmergencyUsed = true;
     }
 
     const newSettings = {
       timeLimitMinutes: timeLimit,
-      extremeModeEnabled: willBeExtremeEnabled,
+      softModeEnabled: willBeSoftMode,
+      extremeModeEnabled: willBeExtremeMode,
       extremeDurationMinutes: extremeDuration,
       showDebugCountdown: showDebugCountdownInput.checked
     };
@@ -198,14 +218,18 @@ todoInput.addEventListener("keypress", (e) => {
   }
 });
 
-// Prevent toggling extreme mode if lock-in is active
-extremeModeInput.addEventListener("change", () => {
-  chrome.storage.sync.get("extremeModeEmergencyUsed", data => {
-    const emergencyUsed = data.extremeModeEmergencyUsed || false;
-    if (emergencyUsed && !extremeModeInput.checked) {
-      showStatus("Extreme mode cannot be disabled after emergency use.", true);
-      extremeModeInput.checked = true;
-    }
+// Prevent changing mode if extreme mode lock-in is active
+[softModeInput, normalModeInput, extremeModeInput].forEach(radio => {
+  radio.addEventListener("change", () => {
+    chrome.storage.sync.get("extremeModeEmergencyUsed", data => {
+      const emergencyUsed = data.extremeModeEmergencyUsed || false;
+      if (emergencyUsed && !extremeModeInput.checked) {
+        showStatus("Extreme mode cannot be disabled after emergency use.", true);
+        extremeModeInput.checked = true;
+        softModeInput.checked = false;
+        normalModeInput.checked = false;
+      }
+    });
   });
 });
 

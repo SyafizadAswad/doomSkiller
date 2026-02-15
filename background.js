@@ -5,6 +5,7 @@
 const DEFAULT_SETTINGS = {
   enabled: true,
   timeLimitMinutes: 5, // limit per continuous session
+  softModeEnabled: false, // apply grayscale filter instead of blocking
   extremeModeEnabled: false,
   extremeDurationMinutes: 60, // block duration when extreme mode triggered
   showDebugCountdown: false // show in-page countdown overlay
@@ -140,28 +141,60 @@ function saveState() {
 function isCurrentlyBlocked() {
   const now = Date.now();
   if (blockUntil && now >= blockUntil) {
-    // Block has expired; clear it
+    // Block has expired; clear it and remove filters
     blockUntil = 0;
     saveState();
+    
+    // Remove filters from all tabs if soft mode was active
+    if (settings.softModeEnabled) {
+      chrome.tabs.query({}, tabs => {
+        for (const tab of tabs) {
+          if (tab.url && isTargetUrl(tab.url)) {
+            applyFilterToTab(tab.id, false);
+          }
+        }
+      });
+    }
     return false;
   }
   return blockUntil && Date.now() < blockUntil;
 }
 
+// Send filter message to content script
+function applyFilterToTab(tabId, apply) {
+  chrome.tabs.sendMessage(tabId, {
+    type: "DK_APPLY_FILTER",
+    apply: apply
+  }).catch(() => {
+    // Tab might not have content script loaded yet; ignore errors
+  });
+}
+
 // Enforce blocking on a single tab if needed
 function enforceBlockingOnTab(tabId, urlString) {
-  if (!isCurrentlyBlocked()) return;
+  if (!isCurrentlyBlocked()) {
+    // Not blocked, but check if we need to remove filter (soft mode)
+    if (settings.softModeEnabled && isTargetUrl(urlString)) {
+      applyFilterToTab(tabId, false);
+    }
+    return;
+  }
   if (!isTargetUrl(urlString)) return;
 
-  const blockUrl = getBlockPageUrl();
-  chrome.tabs.update(tabId, { url: blockUrl }).catch(() => {
-    // Tabs might already be gone; ignore errors
-  });
+  if (settings.softModeEnabled) {
+    // Soft mode: apply grayscale filter instead of redirecting
+    applyFilterToTab(tabId, true);
+  } else {
+    // Normal or extreme mode: redirect to block page
+    const blockUrl = getBlockPageUrl();
+    chrome.tabs.update(tabId, { url: blockUrl }).catch(() => {
+      // Tabs might already be gone; ignore errors
+    });
+  }
 }
 
 // Enforce blocking on all open target tabs
 function enforceBlockingOnAllTabs() {
-  if (!isCurrentlyBlocked()) return;
   chrome.tabs.query({}, tabs => {
     for (const tab of tabs) {
       if (tab.url && isTargetUrl(tab.url)) {
@@ -288,8 +321,21 @@ function handleLimitReached(tab) {
       "Doomscrolling blocked",
       `Extreme mode: all social media sites are blocked for ${settings.extremeDurationMinutes} minutes.`
     );
+  } else if (settings.softModeEnabled) {
+    // Soft mode: apply grayscale filter instead of blocking
+    const durationMs = settings.extremeDurationMinutes * 60 * 1000;
+    blockUntil = now + durationMs;
+    saveState();
+
+    // Apply filter to all target tabs
+    enforceBlockingOnAllTabs();
+
+    createNotification(
+      "Doomscrolling filter applied",
+      `Soft mode: grayscale filter applied for ${settings.extremeDurationMinutes} minutes. Sites remain accessible but less appealing.`
+    );
   } else {
-    // Redirect only the current tab to the local block page
+    // Normal mode: Redirect only the current tab to the local block page
     const blockUrl = getBlockPageUrl();
     chrome.tabs.update(tab.id, { url: blockUrl }).catch(() => {});
     createNotification(
@@ -327,8 +373,13 @@ chrome.tabs.onActivated.addListener(activeInfo => {
 // Track URL changes and enforce blocking
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.url) {
-    // New URL: maybe enforce blocking
+    // New URL: maybe enforce blocking or apply filter
     enforceBlockingOnTab(tabId, changeInfo.url);
+  }
+
+  // When page loads completely, check if we need to apply filter
+  if (changeInfo.status === "complete" && tab.url) {
+    enforceBlockingOnTab(tabId, tab.url);
   }
 
   if (tabId === currentActiveTabId && (changeInfo.status === "complete" || changeInfo.url)) {

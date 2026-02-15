@@ -2,6 +2,7 @@
 // Debug countdown overlay shown on target sites while a doomscrolling session is active.
 
 const DK_OVERLAY_ID = "dk-debug-countdown-overlay";
+const DK_FILTER_STYLE_ID = "dk-grayscale-filter";
 let dkIntervalId = null;
 
 function dkIsTargetUrl(urlString) {
@@ -24,20 +25,37 @@ function dkIsTargetUrl(urlString) {
     return true;
   }
 
-  // Instagram Reels
+  // Instagram (all of it)
   if (
-    (hostname === "www.instagram.com" || hostname === "instagram.com") &&
-    path.startsWith("/reels")
+    hostname === "www.instagram.com" ||
+    hostname === "instagram.com"
   ) {
     return true;
   }
 
-  // Twitter / X main feed (broad match)
+  // Twitter / X (all of it)
   if (
     hostname === "twitter.com" ||
     hostname === "www.twitter.com" ||
     hostname === "x.com" ||
     hostname === "www.x.com"
+  ) {
+    return true;
+  }
+
+  // Facebook (all of it)
+  if (
+    hostname === "www.facebook.com" ||
+    hostname === "facebook.com" ||
+    hostname === "m.facebook.com"
+  ) {
+    return true;
+  }
+
+  // TikTok (all of it)
+  if (
+    hostname === "www.tiktok.com" ||
+    hostname === "tiktok.com"
   ) {
     return true;
   }
@@ -121,10 +139,43 @@ function dkStartInterval() {
   dkIntervalId = window.setInterval(dkUpdateOnce, 1000);
 }
 
+function dkApplyFilter(apply) {
+  let styleEl = document.getElementById(DK_FILTER_STYLE_ID);
+  
+  if (apply) {
+    if (!styleEl) {
+      styleEl = document.createElement("style");
+      styleEl.id = DK_FILTER_STYLE_ID;
+      document.head.appendChild(styleEl);
+    }
+    styleEl.textContent = "html { filter: grayscale(100%) !important; }";
+  } else {
+    if (styleEl) {
+      styleEl.remove();
+    }
+  }
+}
+
+// Listen for messages from background script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message && message.type === "DK_APPLY_FILTER") {
+    dkApplyFilter(message.apply);
+    sendResponse({ success: true });
+  }
+  return true;
+});
+
 function dkInit() {
   // Always start the interval; dkUpdateOnce() itself checks if the URL is a target.
   // This ensures we still work on SPA-style navigation (e.g., YouTube Shorts).
   dkStartInterval();
+  
+  // Check if we should apply filter on page load
+  chrome.runtime.sendMessage({ type: "DK_GET_STATUS" }, response => {
+    if (response && response.isBlocked && response.settings && response.settings.softModeEnabled) {
+      dkApplyFilter(true);
+    }
+  });
 }
 
 dkInit();
